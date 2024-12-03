@@ -1,3 +1,5 @@
+use colored::*;
+
 fn main() {
     let reports = include_str!("../../input.txt")
         .lines()
@@ -12,54 +14,57 @@ fn main() {
         .iter()
         .enumerate()
         .fold(0, |acc, (report_index, report)| {
-            let mut ascending = None;
-            let mut dampened = false;
-            let safe = report.windows(3).enumerate().all(|(level_index, window)| {
-                let diff = window[1] as i8 - window[0] as i8;
-                let safe = is_diff_safe(diff, &mut ascending);
-                if !safe
-                    && !dampened
-                    && is_diff_safe(window[2] as i8 - window[0] as i8, &mut ascending)
-                {
-                    print!(
-                        "Bad level {} at index {} of report {:?} dampened.",
-                        window[1],
-                        level_index + 1,
-                        report
-                    );
-                    dampened = true;
-                    true
-                } else {
-                    safe
+            match first_bad_window(report) {
+                None => acc + 1,
+                Some(bad_window) => {
+                    let mut trial_report = report.clone();
+                    trial_report.remove(bad_window + 1);
+                    if (first_bad_window(&trial_report)).is_none() {
+                        alert_of_dampen(report, bad_window + 1, report_index);
+                        acc + 1
+                    } else {
+                        let mut trial_report = report.clone();
+                        trial_report.remove(bad_window);
+                        if (first_bad_window(&trial_report)).is_none() {
+                            alert_of_dampen(report, bad_window, report_index);
+                            acc + 1
+                        } else {
+                            acc
+                        }
+                    }
                 }
-            });
-
-            let last_two = report.last_chunk::<2>().unwrap();
-
-            if !is_diff_safe(last_two[1] as i8 - last_two[0] as i8, &mut ascending) {
-                if dampened {
-                    acc
-                } else {
-                    print!(
-                        "Bad level {} at index {} of report {:?} (No. {}) dampened.",
-                        last_two[1],
-                        report.len() - 1,
-                        report,
-                        report_index + 1,
-                    );
-                    acc + 1
-                }
-            } else if safe {
-                acc + 1
-            } else {
-                acc
             }
-            println!();
         });
 
     println!("{}", out);
 }
 
-fn is_diff_safe(diff: i8, ascending: &mut Option<bool>) -> bool {
-    (*ascending.get_or_insert(diff > 0) == (diff > 0)) && (1..=3).contains(&diff.abs())
+fn first_bad_window(report: &[u8]) -> Option<usize> {
+    let mut ascending = None;
+    for (left_i, window) in report.windows(2).enumerate() {
+        let diff = window[1] as i8 - window[0] as i8;
+        if !((*ascending.get_or_insert(diff > 0) == (diff > 0)) && (1..=3).contains(&diff.abs())) {
+            return Some(left_i);
+        }
+    }
+    None
+}
+
+fn alert_of_dampen(report: &[u8], removed_index: usize, report_index: usize) {
+    let mut string = "[".to_string();
+    for (i, level) in report.iter().take(report.len() - 1).enumerate() {
+        let level = if i == removed_index {
+            level.to_string().red().to_string()
+        } else {
+            level.to_string()
+        };
+        string.push_str(&format!("{}, ", level));
+    }
+    let last_level = if removed_index == report.len() - 1 {
+        report.last().unwrap().to_string().red().to_string()
+    } else {
+        report.last().unwrap().to_string()
+    };
+    string.push_str(&format!("{}]", last_level));
+    println!("Successfully dampened report {}: {}", report_index, string);
 }
