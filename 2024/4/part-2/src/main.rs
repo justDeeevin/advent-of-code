@@ -31,23 +31,32 @@ fn main() {
         .collect::<Vec<_>>();
 
     let out = updates.iter().fold(0, |acc, update| {
-        if !valid_update(&rules, update) {
+        let mut new_update = update.clone();
+
+        while let Some((left, right)) = required_swap(&rules, &new_update) {
+            new_update.swap(left, right);
+        }
+
+        if new_update == *update {
             acc
         } else {
-            acc + update[update.len() / 2] as u16
+            acc + new_update[new_update.len() / 2] as u16
         }
     });
 
     println!("{out}");
 }
 
-fn valid_update(rules: &HashMap<u8, Vec<u8>>, update: &[u8]) -> bool {
+fn required_swap(rules: &HashMap<u8, Vec<u8>>, update: &[u8]) -> Option<(usize, usize)> {
     let mut past = Vec::new();
-    !update.iter().any(|page| {
+    for (i, page) in update.iter().enumerate() {
         past.push(page);
         let Some(followers) = rules.get(page) else {
-            return false;
+            continue;
         };
-        followers.iter().any(|p| past.contains(&p))
-    })
+        if let Some(swap_i) = past.iter().position(|p| followers.contains(p)) {
+            return Some((i, swap_i));
+        }
+    }
+    None
 }
