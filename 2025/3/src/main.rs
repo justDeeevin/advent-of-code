@@ -1,4 +1,4 @@
-const INPUT: &str = include_str!("../../input.txt");
+const INPUT: &str = include_str!("../input.txt");
 // const INPUT: &str = r#"987654321111111
 // 811111111111119
 // 234234234234278
