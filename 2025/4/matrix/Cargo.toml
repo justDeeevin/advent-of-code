@@ -1,0 +1,12 @@
+[package]
+name = "matrix"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+syn = "2.0.111"
+quote = "1.0.42"
+proc-macro2 = { version = "1.0.103", features = ["span-locations"] }
+
+[lib]
+proc-macro = true
