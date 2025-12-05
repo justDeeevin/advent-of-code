@@ -3,6 +3,28 @@ use quote::{ToTokens, quote};
 use std::path::PathBuf;
 use syn::{Error, Ident, LitStr, Token, parse::Parse, parse_macro_input};
 
+struct ConstMatrix<T>(Matrix<T>);
+
+impl<T> Parse for ConstMatrix<T>
+where
+    Matrix<T>: Parse,
+{
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        Ok(Self(Matrix::parse(input)?))
+    }
+}
+
+struct MutMatrix<T>(Matrix<T>);
+
+impl<T> Parse for MutMatrix<T>
+where
+    Matrix<T>: Parse,
+{
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        Ok(Self(Matrix::parse(input)?))
+    }
+}
+
 struct Matrix<T> {
     name: Ident,
     lit: LitStr,
@@ -15,15 +37,15 @@ impl Parse for Matrix<String> {
     }
 }
 
-impl ToTokens for Matrix<String> {
+impl ToTokens for ConstMatrix<String> {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
-        self.lines_to_matrix(
-            self.value
-                .lines()
-                .map(|l| l.chars().collect::<Vec<_>>())
-                .collect::<Vec<_>>(),
-            tokens,
-        );
+        self.0.to_tokens_inner(tokens, false);
+    }
+}
+
+impl ToTokens for MutMatrix<String> {
+    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+        self.0.to_tokens_inner(tokens, true);
     }
 }
 
@@ -40,8 +62,33 @@ impl Parse for Matrix<PathBuf> {
     }
 }
 
-impl ToTokens for Matrix<PathBuf> {
+impl ToTokens for ConstMatrix<PathBuf> {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+        self.0.to_tokens_inner(tokens, false);
+    }
+}
+
+impl ToTokens for MutMatrix<PathBuf> {
+    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+        self.0.to_tokens_inner(tokens, true);
+    }
+}
+
+impl Matrix<String> {
+    fn to_tokens_inner(&self, tokens: &mut proc_macro2::TokenStream, mutable: bool) {
+        self.lines_to_matrix(
+            self.value
+                .lines()
+                .map(|l| l.chars().collect::<Vec<_>>())
+                .collect::<Vec<_>>(),
+            tokens,
+            mutable,
+        );
+    }
+}
+
+impl Matrix<PathBuf> {
+    fn to_tokens_inner(&self, tokens: &mut proc_macro2::TokenStream, mutable: bool) {
         let contents = match std::fs::read_to_string(&self.value) {
             Ok(contents) => contents,
             Err(err) => {
@@ -57,6 +104,7 @@ impl ToTokens for Matrix<PathBuf> {
                 .map(|l| l.chars().collect::<Vec<_>>())
                 .collect::<Vec<_>>(),
             tokens,
+            mutable,
         );
     }
 }
@@ -75,7 +123,12 @@ impl<T> Matrix<T> {
             lit,
         })
     }
-    fn lines_to_matrix(&self, lines: Vec<Vec<char>>, tokens: &mut proc_macro2::TokenStream) {
+    fn lines_to_matrix(
+        &self,
+        lines: Vec<Vec<char>>,
+        tokens: &mut proc_macro2::TokenStream,
+        mutable: bool,
+    ) {
         let name = &self.name;
         let width = lines.first().map(|l| l.len()).unwrap_or(0);
         for (i, line) in lines.iter().enumerate().skip(1) {
@@ -88,9 +141,14 @@ impl<T> Matrix<T> {
         }
         let len = lines.len();
         let width = lines.first().map(|l| l.len()).unwrap_or(0);
+        let decl = if mutable {
+            quote!(let mut)
+        } else {
+            quote!(const)
+        };
 
         quote! {
-            const #name: [[char; #width]; #len] = [
+            #decl #name: [[char; #width]; #len] = [
                 #(
                     [#(#lines,)*],
                 )*
@@ -103,7 +161,15 @@ impl<T> Matrix<T> {
 #[proc_macro]
 /// Create a constant matrix of characters from a string literal.
 pub fn matrix_str(input: TokenStream) -> TokenStream {
-    parse_macro_input!(input as Matrix<String>)
+    parse_macro_input!(input as ConstMatrix<String>)
+        .into_token_stream()
+        .into()
+}
+
+#[proc_macro]
+/// Create a mutable matrix of characters from a string literal.
+pub fn mut_matrix_str(input: TokenStream) -> TokenStream {
+    parse_macro_input!(input as MutMatrix<String>)
         .into_token_stream()
         .into()
 }
@@ -113,7 +179,17 @@ pub fn matrix_str(input: TokenStream) -> TokenStream {
 ///
 /// **The path is relative to the crate root.**
 pub fn matrix_file(input: TokenStream) -> TokenStream {
-    parse_macro_input!(input as Matrix<PathBuf>)
+    parse_macro_input!(input as ConstMatrix<PathBuf>)
+        .into_token_stream()
+        .into()
+}
+
+#[proc_macro]
+/// Create a mutable matrix of characters from a file at the given path.
+///
+/// **The path is relative to the crate root.**
+pub fn mut_matrix_file(input: TokenStream) -> TokenStream {
+    parse_macro_input!(input as MutMatrix<PathBuf>)
         .into_token_stream()
         .into()
 }
