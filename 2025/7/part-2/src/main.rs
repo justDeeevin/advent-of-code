@@ -31,16 +31,13 @@ fn main() {
     )]);
 
     for line in INPUT.lines().skip(1) {
-        let mut next = beams.clone();
-
-        for (col, count) in beams {
+        for (col, count) in beams.clone() {
             if line.chars().nth(col).unwrap() == '^' {
-                *next.entry(col - 1).or_default() += count;
-                *next.entry(col + 1).or_default() += count;
-                next.remove(&col);
+                *beams.entry(col - 1).or_default() += count;
+                *beams.entry(col + 1).or_default() += count;
+                beams.remove(&col);
             }
         }
-        beams = next;
     }
 
     let out = beams.values().sum::<usize>();
